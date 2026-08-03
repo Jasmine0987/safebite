@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.ai.llm import echo_runnable
+from app.ai.llm import llm
 
 app = FastAPI(
     title="SafeBite AI Service",
@@ -17,5 +17,5 @@ def health_check():
 
 @app.get("/ai-test")
 def ai_test():
-    result = echo_runnable.invoke("casein")
-    return {"input": "casein", "output": result}
+    response = llm.invoke("Say hello in exactly five words.")
+    return {"output": response.content}
