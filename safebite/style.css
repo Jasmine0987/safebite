@@ -557,18 +557,18 @@ h1,h2,h3,h4{
 #fl-vase        { top:1%;   left:0%;   height:46%; z-index:6; }
 #fl-wineglass1  { top:6%;   left:18%;  height:28%; z-index:5; }
 #fl-fork        { top:14%;  left:30%;  height:26%; z-index:5; }
-#fl-sausage     { top:5%;   left:39%;  height:25%; z-index:4; }
+#fl-sausage     { top:15%;   left:39%;  height:25%; z-index:4; }
 #fl-bottle      { top:1%;   left:56%;  height:46%; z-index:6; }
 #fl-candle2     { top:0%;   left:68%;  height:48%; z-index:6; }
-#fl-saltpepper  { top:2%;   left:79%;  height:30%; z-index:5; }
-#fl-cheese      { top:1%;   left:90%;  height:22%; z-index:5; }
+#fl-saltpepper  { top:2%;   left:71%;  height:30%; z-index:5; }
+#fl-cheese      { top:5%;   left:85%;  height:22%; z-index:5; }
 
 #fl-candle1     { top:32%;  left:13%;  height:35%; z-index:4; }
-#fl-olivesbowl  { top:44%;  left:27%;  height:22%; z-index:3; }
+#fl-olivesbowl  { top:44%;  left:30%;  height:22%; z-index:3; }
 #fl-olivesloose { top:56%;  left:21%;  height:11%; z-index:3; }
 #fl-jar         { top:40%;  left:42%;  height:25%; z-index:4; }
-#fl-bread       { top:56%;  left:24%;  height:30%; z-index:3; }
-#fl-spoon       { top:58%;  left:47%;  height:16%; z-index:3; }
+#fl-bread       { top:69%;  left:24%;  height:30%; z-index:3; }
+#fl-spoon       { top:58%;  left:45%;  height:16%; z-index:3; }
 #fl-wineglass2  { top:66%;  left:59%;  height:28%; z-index:4; }
 #fl-charcuterie { top:50%;  left:68%;  height:40%; z-index:3; }
 #fl-knife       { top:35%;  left:88%;  height:30%; z-index:4; }

@@ -40,12 +40,14 @@ function createSprite(el, { cols = 5, rows = 5, fps = 12, autoplay = true } = {}
 }
 
 // =========================================================
-// CUSTOM BEE CURSOR + STITCHED TRAIL
+// CUSTOM BEE CURSOR + DRIPPING HONEY TRAIL
 // Two-frame PNG (fly / idle) — fly is the default everywhere,
 // idle only shows while hovering a button or link. No rotation:
 // the bee always stays upright regardless of movement direction.
-// Suppressed entirely while the pointer is inside the footer,
-// where the paw cursor (further below) takes over instead.
+// Instead of a stitched line, the bee leaves small honey drops
+// behind as it moves — they fall and fade under light gravity,
+// no dark lines involved. Suppressed entirely while the pointer
+// is inside the footer, where the paw cursor takes over instead.
 // =========================================================
 (function(){
   const cursor = document.getElementById('appy-cursor');
@@ -71,12 +73,15 @@ function createSprite(el, { cols = 5, rows = 5, fps = 12, autoplay = true } = {}
     el.addEventListener('mouseleave', () => setBeeFrame(false));
   });
 
-  let points = [];
   let mouseX = window.innerWidth / 2;
   let mouseY = window.innerHeight / 2;
   let lastX = mouseX;
   let lastY = mouseY;
-  let traveled = 0;
+  let dripDist = 0;
+
+  // honey drips — small teardrops spawned as the bee moves, that
+  // fall and fade under gravity instead of a connected line
+  let drips = [];
 
   function resizeCanvas(){
     canvas.width = window.innerWidth;
@@ -93,56 +98,72 @@ function createSprite(el, { cols = 5, rows = 5, fps = 12, autoplay = true } = {}
     const dy = mouseY - lastY;
     const dist = Math.hypot(dx, dy);
 
-    if (dist > 4){
-      points.push({ x: mouseX, y: mouseY, life: 1 });
+    if (dist > 3){
+      dripDist += dist;
       lastX = mouseX;
       lastY = mouseY;
-      traveled += dist;
     }
 
     cursor.style.left = mouseX + 'px';
     cursor.style.top = mouseY + 'px';
 
-    if (points.length > 160) points.shift();
+    if (dripDist > 22){
+      dripDist = 0;
+      drips.push({
+        x: mouseX + (Math.random() * 10 - 5),
+        y: mouseY + 20,
+        vy: 0.3 + Math.random() * 0.3,
+        size: 3.5 + Math.random() * 2.5,
+        life: 1
+      });
+      if (drips.length > 50) drips.shift();
+    }
   });
+
+  function drawDrip(d){
+    const s = d.size;
+    ctx.save();
+    ctx.globalAlpha = Math.max(d.life, 0);
+
+    // teardrop shape: pointed top, rounded bottom
+    ctx.beginPath();
+    ctx.moveTo(d.x, d.y - s * 1.5);
+    ctx.quadraticCurveTo(d.x + s, d.y - s * 0.2, d.x, d.y + s);
+    ctx.quadraticCurveTo(d.x - s, d.y - s * 0.2, d.x, d.y - s * 1.5);
+    ctx.closePath();
+
+    const grad = ctx.createLinearGradient(d.x, d.y - s, d.x, d.y + s);
+    grad.addColorStop(0, 'rgba(255,201,56,0.95)');
+    grad.addColorStop(1, 'rgba(196,122,9,0.95)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // tiny highlight for shine
+    ctx.beginPath();
+    ctx.arc(d.x - s * 0.28, d.y - s * 0.15, s * 0.2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fill();
+
+    ctx.restore();
+  }
 
   function drawTrail(){
     const overFooter = document.body.classList.contains('over-footer');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // hide the bee + its stitched trail while the paw cursor owns the footer
+    // hide the bee + its honey drips while the paw cursor owns the footer
     cursor.style.opacity = overFooter ? '0' : '1';
 
-    if (!overFooter && points.length > 1){
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      // soft wide underlay for a bigger, smoother stitched ribbon
-      ctx.strokeStyle = 'rgba(20,20,20,0.18)';
-      ctx.lineWidth = 9;
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      points.forEach((p, i) => {
-        ctx.globalAlpha = p.life * 0.6;
-        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    if (!overFooter){
+      drips.forEach(d => {
+        d.vy += 0.05;
+        d.y += d.vy;
+        d.life -= 0.012;
+        drawDrip(d);
       });
-      ctx.stroke();
-
-      // crisp dashed stitch line on top, bigger dashes than before
-      ctx.strokeStyle = 'rgba(20,20,20,0.65)';
-      ctx.lineWidth = 3.5;
-      ctx.setLineDash([12, 9]);
-      ctx.beginPath();
-      points.forEach((p, i) => {
-        ctx.globalAlpha = p.life;
-        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
-      });
-      ctx.stroke();
-      ctx.globalAlpha = 1;
     }
 
-    points.forEach(p => p.life -= 0.01);
-    points = points.filter(p => p.life > 0);
+    drips = drips.filter(d => d.life > 0);
 
     requestAnimationFrame(drawTrail);
   }
@@ -280,30 +301,51 @@ function createSprite(el, { cols = 5, rows = 5, fps = 12, autoplay = true } = {}
 
 
 // =========================================================
-// SPLIT-WORD TITLE REVEAL (scroll-triggered, "words" style)
+// SPLIT-WORD / SPLIT-LETTER TITLE REVEAL (scroll-triggered)
+// Default behavior (.split-title alone) animates whole words
+// falling in — unchanged, still what index.html uses. Adding
+// the modifier class "split-letters" alongside "split-title"
+// animates individual characters falling in instead, with each
+// word's letters grouped in a non-breaking wrapper so the line
+// only ever wraps at real word boundaries (not mid-word).
 // =========================================================
 (function(){
   if (!window.gsap) return;
   const hasScrollTrigger = !!window.ScrollTrigger;
 
-  function splitWords(root){
-    const words = [];
+  function splitBy(root, unit){
+    // unit: 'word' wraps each non-whitespace run in a span;
+    // 'letter' wraps each word in a nowrap group, with each
+    // character inside it as its own animatable span.
+    const pieces = [];
+    const className = unit === 'letter' ? 'split-letter' : 'split-word';
 
     function walk(node){
       Array.from(node.childNodes).forEach(child => {
         if (child.nodeType === Node.TEXT_NODE){
-          const parts = child.textContent.split(/(\s+)/); // keep separators
+          const parts = child.textContent.split(/(\s+)/); // words + whitespace
           const frag = document.createDocumentFragment();
           parts.forEach(part => {
             if (part === '') return;
             if (/^\s+$/.test(part)){
               frag.appendChild(document.createTextNode(part));
+            } else if (unit === 'letter'){
+              const wordWrap = document.createElement('span');
+              wordWrap.className = 'split-word-wrap';
+              part.split('').forEach(ch => {
+                const span = document.createElement('span');
+                span.className = className;
+                span.textContent = ch;
+                wordWrap.appendChild(span);
+                pieces.push(span);
+              });
+              frag.appendChild(wordWrap);
             } else {
               const span = document.createElement('span');
-              span.className = 'split-word';
+              span.className = className;
               span.textContent = part;
               frag.appendChild(span);
-              words.push(span);
+              pieces.push(span);
             }
           });
           node.replaceChild(frag, child);
@@ -315,26 +357,27 @@ function createSprite(el, { cols = 5, rows = 5, fps = 12, autoplay = true } = {}
     }
 
     walk(root);
-    return words;
+    return pieces;
   }
 
   const titles = document.querySelectorAll('.split-title');
   titles.forEach(title => {
-    const words = splitWords(title);
-    if (!words.length) return;
+    const isLetters = title.classList.contains('split-letters');
+    const pieces = splitBy(title, isLetters ? 'letter' : 'word');
+    if (!pieces.length) return;
 
     const tween = {
       y: -100,
       opacity: 0,
       rotation: () => gsap.utils.random(-80, 80),
-      duration: 0.7,
+      duration: isLetters ? 0.5 : 0.7,
       ease: 'back',
-      stagger: 0.15
+      stagger: isLetters ? 0.025 : 0.15
     };
 
     if (hasScrollTrigger){
       gsap.registerPlugin(ScrollTrigger);
-      gsap.from(words, {
+      gsap.from(pieces, {
         ...tween,
         scrollTrigger: {
           trigger: title,
@@ -343,7 +386,7 @@ function createSprite(el, { cols = 5, rows = 5, fps = 12, autoplay = true } = {}
         }
       });
     } else {
-      gsap.from(words, tween);
+      gsap.from(pieces, tween);
     }
   });
 })();
@@ -432,6 +475,117 @@ function createSprite(el, { cols = 5, rows = 5, fps = 12, autoplay = true } = {}
   skipBtn.addEventListener('click', function(e){
     e.preventDefault();
     runAway();
+  });
+})();
+
+// =========================================================
+// JOURNEY TRACKER — clickable 5-step stepper (architecture.html)
+// Auto-advances every 4.5s; a manual click jumps straight to
+// that step and resets the timer; hovering the tracker pauses
+// auto-advance so it never fights a reader mid-read.
+// =========================================================
+(function(){
+  const tracker = document.getElementById('journey-tracker');
+  if (!tracker) return;
+
+  const dots = tracker.querySelectorAll('.journey-dot');
+  const panels = tracker.querySelectorAll('.journey-panel');
+  if (!dots.length || !panels.length) return;
+
+  let current = 1;
+  let timer = null;
+
+  function setStep(n){
+    current = n;
+    dots.forEach(d => d.classList.toggle('active', d.dataset.step === String(n)));
+    panels.forEach(p => p.classList.toggle('active', p.dataset.panel === String(n)));
+  }
+
+  function next(){
+    const n = current >= dots.length ? 1 : current + 1;
+    setStep(n);
+  }
+
+  function startAuto(){
+    stopAuto();
+    timer = setInterval(next, 4500);
+  }
+  function stopAuto(){
+    if (timer) clearInterval(timer);
+    timer = null;
+  }
+
+  dots.forEach(dot => {
+    dot.addEventListener('click', () => {
+      setStep(Number(dot.dataset.step));
+      startAuto();
+    });
+  });
+
+  tracker.addEventListener('mouseenter', stopAuto);
+  tracker.addEventListener('mouseleave', startAuto);
+
+  setStep(1);
+  startAuto();
+})();
+
+// =========================================================
+// FLIP CARDS — tap-to-flip fallback for touch devices
+// (architecture.html "one system, many little decisions")
+// Hover already flips via CSS; this just makes tap/click do
+// the same thing so it works without a mouse.
+// =========================================================
+(function(){
+  const cards = document.querySelectorAll('.flip-card');
+  if (!cards.length) return;
+
+  cards.forEach(card => {
+    card.addEventListener('click', () => {
+      card.classList.toggle('is-flipped');
+    });
+  });
+})();
+
+// =========================================================
+// CONNECTION CHAIN — scroll-triggered line draw
+// (architecture.html "the magic is in the connections")
+// =========================================================
+(function(){
+  const line = document.getElementById('chain-line');
+  if (!line) return;
+
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting){
+        line.classList.add('in-view');
+        io.unobserve(line);
+      }
+    });
+  }, { threshold: 0.3 });
+
+  io.observe(line);
+})();
+
+// =========================================================
+// Q&A TOGGLE — "Can I eat this?" / "What can I have instead?"
+// (architecture.html closing section)
+// =========================================================
+(function(){
+  const buttons = document.querySelectorAll('.qa-toggle');
+  const answerText = document.getElementById('qa-answer-text');
+  if (!buttons.length || !answerText) return;
+
+  const answers = {
+    eat: "That's the SCAN flow — point your camera, and SafeBite reads the label against your profile in seconds.",
+    instead: "That's the CRAVE flow — tell SafeBite what you're craving, and it finds something that still hits the spot."
+  };
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      answerText.textContent = answers[btn.dataset.answer] || '';
+    });
   });
 })();
 
