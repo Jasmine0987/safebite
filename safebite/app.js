@@ -297,3 +297,51 @@ const API_BASE = 'http://localhost:8000';
         </div>`;
     });
 })();
+// ---------------------------------------------------------
+// SWAPS PAGE — render ranked swaps for ?scanId= from the
+// real backend (/api/scans/{id} for context, /api/swaps/{id}
+// for the ranked results).
+// ---------------------------------------------------------
+(function(){
+  const root = document.getElementById('swaps-root');
+  if (!root) return;
+
+  const params = new URLSearchParams(window.location.search);
+  const scanId = params.get('scanId');
+  const backLink = document.getElementById('swaps-back-link');
+  const contextEl = document.getElementById('swaps-context');
+
+  if (!scanId){
+    contextEl.textContent = 'No scan selected.';
+    root.innerHTML = '<p class="swap-empty">Go back and scan something flagged first. <a href="dashboard.html">Dashboard</a>.</p>';
+    return;
+  }
+
+  if (backLink) backLink.href = `verdict.html?scanId=${encodeURIComponent(scanId)}`;
+
+  fetch(`${API_BASE}/api/scans/${scanId}`)
+    .then(r => { if (!r.ok) throw new Error(`Scan not found: ${r.status}`); return r.json(); })
+    .then(scan => {
+      contextEl.textContent = `Because "${scan.productName}" was flagged`;
+      return fetch(`${API_BASE}/api/swaps/${scanId}`);
+    })
+    .then(r => { if (!r.ok) throw new Error(`Swaps request failed: ${r.status}`); return r.json(); })
+    .then(data => {
+      if (!data.results.length){
+        root.innerHTML = '<p class="swap-empty">No ranked swaps found for this one yet.</p>';
+        return;
+      }
+      root.innerHTML = `<div class="swap-grid">${data.results.map(s => `
+        <div class="swap-result-card">
+          <span class="swap-macro-delta">${s.macroDelta}</span>
+          <h3>${s.name}</h3>
+          <div class="swap-tags">${s.tags.map(t => `<span class="swap-tag">${t}</span>`).join('')}</div>
+          <p class="swap-why">${s.why}</p>
+        </div>
+      `).join('')}</div>`;
+    })
+    .catch(err => {
+      console.error('Failed to load swaps:', err);
+      root.innerHTML = `<p class="swap-empty">Couldn't reach the backend — is it running on ${API_BASE}?</p>`;
+    });
+})();

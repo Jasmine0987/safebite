@@ -18,8 +18,10 @@ the frontend from mock -> real is a URL change, not a rewrite.
 
 Run:
   pip install -r requirements.txt
-  uvicorn main:app --reload --host 0.0.0.0 --port 8000
+  uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 """
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,30 +29,90 @@ from pydantic import BaseModel
 from typing import List, Optional
 import uuid, io, re
 
-app = FastAPI(title="SafeBite API")
+from app.api.explain_routes import router as explain_router
+from app.core.exceptions import (
+    LLMUnavailableError,
+    llm_unavailable_handler,
+    unhandled_exception_handler,
+)
+from app.core import database as db
+from app.core.config import ALLOWED_ORIGINS, OLLAMA_BASE_URL, MIN_OCR_ALNUM_CHARS
+from app.core.logging_config import logger, setup_logging
+from app.ai.craving_vae import (
+    craving_text_to_vector,
+    flagged_item_to_vector,
+    rank_swaps_vae,
+)
 
-# Allow the static frontend (served from any origin/port during dev) to call this.
+
+# ---------------------------------------------------------------
+# Startup / shutdown
+# ---------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    setup_logging()
+    db.init_db()
+    db.seed_demo_scans_if_empty()
+    _check_ollama_reachable()
+    yield
+
+
+def _check_ollama_reachable() -> None:
+    """
+    Non-fatal startup check for Ollama. The old behavior was: the first
+    request to /explain-ingredient or /explain-swap would fail with a
+    generic connection error and no context. This logs a loud, specific
+    warning once at boot instead, so it's obvious *before* a demo why
+    those two routes won't work, without blocking the rest of the API
+    (scan/verdict/swap-ranking/profile all work fine without Ollama).
+    """
+    try:
+        import httpx
+        httpx.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=2.0)
+        logger.info(f"Ollama reachable at {OLLAMA_BASE_URL}")
+    except Exception:
+        logger.warning(
+            "=" * 70 + "\n"
+            f"Ollama not reachable at {OLLAMA_BASE_URL}.\n"
+            "/explain-ingredient and /explain-swap will return 503 until:\n"
+            "  1) Ollama is installed and running (https://ollama.com), and\n"
+            "  2) the model is pulled: `ollama pull llama3.2`\n"
+            "Everything else (scan, verdict, swaps, profile) works without it.\n"
+            + "=" * 70
+        )
+
+
+app = FastAPI(title="SafeBite API", lifespan=lifespan)
+
+# Restricted to a dev allowlist by default — see app/core/config.py to
+# override via the ALLOWED_ORIGINS env var when deploying. The old
+# allow_origins=["*"] let any website's frontend JS call this API using a
+# visitor's browser session; that's a real vulnerability once this is
+# deployed anywhere with actual user data attached.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Wire in the AI explanation routes (/explain-ingredient, /explain-swap).
+# Without this include_router call, explain_routes.py is fully coded but
+# unreachable at runtime.
+app.include_router(explain_router)
+
+# Register the custom exception handlers so LLM failures return the clean
+# {"error": ..., "message": ...} JSON shape instead of a raw framework 500.
+app.add_exception_handler(LLMUnavailableError, llm_unavailable_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
+
+
 # ---------------------------------------------------------------
-# "DATABASE" — in-memory for now. Swap for SQLite/Postgres later;
-# nothing above this layer needs to change if you keep the shape.
+# Static reference data — ingredient KB stays in-code (small, fixed
+# vocabulary, not user data). Scans and the user profile are the things
+# that actually needed persistence, and now live in app/core/database.py.
 # ---------------------------------------------------------------
 
-USER_PROFILE = {
-    "allergens": [],   # starts empty so first-time users hit the onboarding guard
-}
-
-SCANS_DB = {}  # scan_id -> scan dict
-
-# Ingredient knowledge base: canonical id -> aliases + plain-language copy.
-# TODO: replace with your trained captioner output; this is the rule-based
-# stand-in so the verdict engine and ingredient-detail page work end-to-end today.
 INGREDIENT_KB = {
     "red40": {
         "name": "Red 40",
@@ -83,31 +145,6 @@ INGREDIENT_KB = {
 }
 
 
-# Swap candidates. TODO: replace with the real VAE embedding search —
-# this is a keyword/tag match so Swap Results + Craving Search are
-# functional today instead of blocked on the model.
-SWAP_DB = [
-    {"id": "sw1", "name": "Sparkling Apple", "tags": ["soda", "sweet", "drink", "fizzy"],
-     "macroDelta": "-12g sugar, same fizz", "why": "Same carbonated snap as soda, without the added sugar."},
-    {"id": "sw2", "name": "Coconut Yogurt Bark", "tags": ["dairy", "sweet", "snack", "crunchy"],
-     "macroDelta": "0g dairy, +3g fiber", "why": "Dairy-free but keeps the creamy-crunchy combo."},
-    {"id": "sw3", "name": "Roasted Chickpeas", "tags": ["peanut", "salty", "snack", "crunchy"],
-     "macroDelta": "+4g protein, nut-free", "why": "Same salty crunch as peanuts, without the allergen."},
-    {"id": "sw4", "name": "Herb Rice Crackers", "tags": ["gluten", "salty", "snack", "crunchy"],
-     "macroDelta": "0g gluten, same crunch", "why": "Gluten-free swap that keeps the crunchy-savory profile."},
-    {"id": "sw5", "name": "Frozen Grapes", "tags": ["sweet", "snack", "cold", "fruity"],
-     "macroDelta": "-18g sugar, all natural", "why": "Scratches the same sweet-cold itch as candy or ice cream."},
-]
-
-def rank_swaps(query_tags: List[str], limit: int = 3):
-    scored = []
-    for item in SWAP_DB:
-        score = len(set(t.lower() for t in query_tags) & set(item["tags"]))
-        scored.append((score, item))
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return [item for score, item in scored[:limit]]
-
-
 # ---------------------------------------------------------------
 # Pydantic response models — mirror app-data.js shapes
 # ---------------------------------------------------------------
@@ -122,6 +159,7 @@ class ScanResult(BaseModel):
     date: str
     verdict: str  # "safe" | "flagged" | "unclear"
     flaggedIngredients: List[FlaggedIngredient]
+    note: Optional[str] = None  # populated when a verdict was downgraded (e.g. OCR failure)
 
 class IngredientDetail(BaseModel):
     name: str
@@ -136,6 +174,7 @@ class ProfileIn(BaseModel):
 # ---------------------------------------------------------------
 # PANEL DETECTION — TODO: real YOLO/CNN detector goes here.
 # For now: no-op, assumes the whole uploaded image is the panel.
+# Architected but not yet trained — see the report's honesty note.
 # ---------------------------------------------------------------
 def detect_panel(image_bytes: bytes) -> bytes:
     # TODO: run your trained detector, crop to the ingredients panel,
@@ -151,6 +190,11 @@ def run_ocr(image_bytes: bytes) -> str:
     try:
         import pytesseract
         from PIL import Image
+
+        from app.core.config import TESSERACT_CMD
+        if TESSERACT_CMD:
+            pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+
         img = Image.open(io.BytesIO(image_bytes))
         text = pytesseract.image_to_string(img)
         return text.lower()
@@ -158,17 +202,33 @@ def run_ocr(image_bytes: bytes) -> str:
         # TODO: swap for your trained CNN/CRNN OCR model (Section 9 metrics).
         # pytesseract is just a real, working placeholder so the pipeline
         # is testable end-to-end before your custom model is ready.
-        print("OCR failed/unavailable:", e)
+        logger.warning(f"OCR failed/unavailable: {e}")
         return ""
 
 
 # ---------------------------------------------------------------
 # VERDICT ENGINE — rule-based keyword matching against the user's
-# allergen profile + the ingredient KB above. This is genuinely
-# functional today; swap in the deterministic engine from your
-# report (Section on the verdict logic) when it's ready.
+# allergen profile + the ingredient KB above, deliberately kept
+# deterministic and auditable (see the report's rationale for why
+# this one component is NOT a learned classifier).
+#
+# Safety-critical fix: OCR failure or near-empty extraction must
+# NEVER fall through to "safe" — that would be a silent false
+# negative on an allergen safety check. If we can't read enough of
+# the label, the verdict is "unclear" with an explicit note, same
+# as the existing ambiguous-ingredient case, so the frontend's
+# 3-state UI (safe/flagged/unclear) doesn't need to change.
 # ---------------------------------------------------------------
 def compute_verdict(ocr_text: str, profile_allergens: List[str]):
+    alnum_chars = re.sub(r"[^a-z0-9]", "", ocr_text)
+    if len(alnum_chars) < MIN_OCR_ALNUM_CHARS:
+        return (
+            "unclear",
+            [],
+            "Couldn't read enough text from this label to check it safely. "
+            "Try a clearer, well-lit photo of the ingredients panel.",
+        )
+
     flagged = []
     unclear = False
 
@@ -184,13 +244,13 @@ def compute_verdict(ocr_text: str, profile_allergens: List[str]):
                 break
 
     if flagged:
-        verdict = "flagged"
+        verdict, note = "flagged", None
     elif unclear:
-        verdict = "unclear"
+        verdict, note = "unclear", "Contains an ingredient whose exact source can't be confirmed from the label alone."
     else:
-        verdict = "safe"
+        verdict, note = "safe", None
 
-    return verdict, flagged
+    return verdict, flagged, note
 
 
 # ---------------------------------------------------------------
@@ -203,7 +263,7 @@ async def scan_label(file: UploadFile = File(...), product_name: Optional[str] =
 
     cropped = detect_panel(image_bytes)          # TODO: real detector
     ocr_text = run_ocr(cropped)                   # real OCR (pytesseract placeholder)
-    verdict, flagged = compute_verdict(ocr_text, USER_PROFILE["allergens"])
+    verdict, flagged, note = compute_verdict(ocr_text, db.get_profile()["allergens"])
 
     scan_id = str(uuid.uuid4())[:8]
     scan = {
@@ -212,19 +272,20 @@ async def scan_label(file: UploadFile = File(...), product_name: Optional[str] =
         "date": "today",
         "verdict": verdict,
         "flaggedIngredients": flagged,
+        "note": note,
     }
-    SCANS_DB[scan_id] = scan
+    db.save_scan(scan)
     return scan
 
 
 @app.get("/api/scans", response_model=List[ScanResult])
 def list_scans():
-    return list(SCANS_DB.values())[::-1]  # most recent first
+    return db.list_scans()  # already most-recent-first
 
 
 @app.get("/api/scans/{scan_id}", response_model=ScanResult)
 def get_scan(scan_id: str):
-    scan = SCANS_DB.get(scan_id)
+    scan = db.get_scan(scan_id)
     if not scan:
         raise HTTPException(404, "Scan not found")
     return scan
@@ -245,32 +306,38 @@ def get_ingredient(ingredient_id: str):
 
 @app.get("/api/swaps/{scan_id}")
 def get_swaps_for_scan(scan_id: str):
-    scan = SCANS_DB.get(scan_id)
+    scan = db.get_scan(scan_id)
     if not scan:
         raise HTTPException(404, "Scan not found")
-    tags = [ing["name"].lower() for ing in scan["flaggedIngredients"]] + [scan["productName"].lower()]
-    # naive tag guess from product name words too, so demo scans still match something
-    tags += re.findall(r"[a-z]+", scan["productName"].lower())
-    return {"query": scan["productName"], "results": rank_swaps(tags)}
+    # Build a craving-signature query vector from the flagged ingredient(s)
+    # and product name, then rank via the trained VAE's latent space
+    # instead of the old tag-overlap heuristic.
+    text_source = " ".join([ing["name"] for ing in scan["flaggedIngredients"]] + [scan["productName"]])
+    query_vec = flagged_item_to_vector(text_source)
+    return {"query": scan["productName"], "results": rank_swaps_vae(query_vec)}
 
 
 @app.get("/api/swaps")
 def search_swaps(q: str):
-    tags = re.findall(r"[a-z]+", q.lower())
-    return {"query": q, "results": rank_swaps(tags)}
+    query_vec = craving_text_to_vector(q)
+    return {"query": q, "results": rank_swaps_vae(query_vec)}
 
 
 @app.get("/api/profile")
 def get_profile():
-    return USER_PROFILE
+    return db.get_profile()
 
 
 @app.post("/api/profile")
 def set_profile(profile: ProfileIn):
-    USER_PROFILE["allergens"] = profile.allergens
-    return USER_PROFILE
+    return db.set_profile(profile.allergens)
 
 
 @app.get("/")
+def root():
+    return {"status": "ok", "service": "safebite-backend"}
+
+
+@app.get("/health")
 def health():
     return {"status": "ok", "service": "safebite-backend"}
