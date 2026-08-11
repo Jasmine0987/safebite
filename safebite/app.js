@@ -277,4 +277,23 @@ const API_BASE = 'http://localhost:8000';
           </div>
           <div class="ingredient-block">
             <div class="ingredient-block-label">ALSO HIDES UNDER</div>
-            <div 
+            <div class="alias-list">
+              ${ingredient.aliases.map(a => `<span class="alias-chip">${a}</span>`).join('')}
+            </div>
+          </div>
+          <div class="ingredient-block">
+            <div class="ingredient-block-label">WHY IT'S FLAGGED FOR YOU</div>
+            <div class="ingredient-block-body">${ingredient.whyForYou}</div>
+          </div>
+        </div>
+      `;
+    })
+    .catch(err => {
+      console.error('Failed to load ingredient:', err);
+      root.innerHTML = `
+        <div class="ingredient-card ingredient-not-found">
+          <h2 class="app-heading">Ingredient not found</h2>
+          <p class="app-subheading">Couldn't load detail for this one — is the backend running on ${API_BASE}?</p>
+        </div>`;
+    });
+})();
