@@ -38,6 +38,7 @@ from app.core.exceptions import (
 from app.core import database as db
 from app.core.config import ALLOWED_ORIGINS, OLLAMA_BASE_URL, MIN_OCR_ALNUM_CHARS
 from app.core.logging_config import logger, setup_logging
+from app.data.allergen_kb import INGREDIENT_KB, ALLERGEN_TAGS
 from app.ai.craving_vae import (
     craving_text_to_vector,
     flagged_item_to_vector,
@@ -113,36 +114,12 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 # that actually needed persistence, and now live in app/core/database.py.
 # ---------------------------------------------------------------
 
-INGREDIENT_KB = {
-    "red40": {
-        "name": "Red 40",
-        "aliases": ["red 40", "fd&c red no. 40", "allura red ac", "e129"],
-        "allergen_tags": [],
-        "plainLanguage": "A synthetic dye made from petroleum, used to make foods look redder than the ingredients actually would on their own.",
-        "whyForYouTemplate": "Flagged because it's a synthetic dye — some people react to it even without a formal allergy.",
-    },
-    "peanut": {
-        "name": "Peanut",
-        "aliases": ["peanut", "peanuts", "groundnut", "arachis oil"],
-        "allergen_tags": ["peanut"],
-        "plainLanguage": "A legume, one of the most common food allergens.",
-        "whyForYouTemplate": "Flagged because peanut is on your allergen profile.",
-    },
-    "milk": {
-        "name": "Milk / Dairy",
-        "aliases": ["milk", "dairy", "whey", "casein", "lactose"],
-        "allergen_tags": ["dairy"],
-        "plainLanguage": "Derived from cow's milk — includes whey and casein even when 'milk' isn't listed directly.",
-        "whyForYouTemplate": "Flagged because dairy is on your allergen profile.",
-    },
-    "natural-flavor": {
-        "name": "Natural Flavor",
-        "aliases": ["natural flavor", "natural flavoring", "natural flavors"],
-        "allergen_tags": [],
-        "plainLanguage": "A catch-all term for flavor compounds from real plant/animal sources — the exact recipe isn't disclosed.",
-        "whyForYouTemplate": "Flagged as 'unclear' because the exact source can't be confirmed from the label alone.",
-    },
-}
+# ---------------------------------------------------------------
+# Ingredient knowledge base — now sourced from app/data/allergen_kb.py,
+# which covers all 9 FDA major allergens instead of just 2. See that
+# file's docstring for where to source a more complete/authoritative
+# version (FARE, EU FIC, Open Food Facts) for a real product.
+# ---------------------------------------------------------------
 
 
 # ---------------------------------------------------------------
@@ -309,18 +286,23 @@ def get_swaps_for_scan(scan_id: str):
     scan = db.get_scan(scan_id)
     if not scan:
         raise HTTPException(404, "Scan not found")
+    profile_allergens = db.get_profile()["allergens"]
     # Build a craving-signature query vector from the flagged ingredient(s)
-    # and product name, then rank via the trained VAE's latent space
-    # instead of the old tag-overlap heuristic.
+    # and product name, then rank via the trained VAE's latent space —
+    # excluding any candidate that itself contains one of the user's
+    # allergens, so a craving-match can never also be an unsafe swap.
     text_source = " ".join([ing["name"] for ing in scan["flaggedIngredients"]] + [scan["productName"]])
     query_vec = flagged_item_to_vector(text_source)
-    return {"query": scan["productName"], "results": rank_swaps_vae(query_vec)}
+    results = rank_swaps_vae(query_vec, exclude_allergens=profile_allergens)
+    return {"query": scan["productName"], "results": results}
 
 
 @app.get("/api/swaps")
 def search_swaps(q: str):
+    profile_allergens = db.get_profile()["allergens"]
     query_vec = craving_text_to_vector(q)
-    return {"query": q, "results": rank_swaps_vae(query_vec)}
+    results = rank_swaps_vae(query_vec, exclude_allergens=profile_allergens)
+    return {"query": q, "results": results}
 
 
 @app.get("/api/profile")

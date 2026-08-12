@@ -51,40 +51,52 @@ AXES = ["sweet", "salty", "crunchy", "fizzy", "creamy", "fruity", "cold", "savor
 SWAP_CATALOG = [
     {"id": "sw1", "name": "Sparkling Apple", "macroDelta": "-12g sugar, same fizz",
      "why": "Same carbonated snap as soda, without the added sugar.",
-     "vec": [0.7, 0.05, 0.1, 0.9, 0.0, 0.6, 0.6, 0.0]},
+     "vec": [0.7, 0.05, 0.1, 0.9, 0.0, 0.6, 0.6, 0.0],
+     "allergen_tags": []},
     {"id": "sw2", "name": "Coconut Yogurt Bark", "macroDelta": "0g dairy, +3g fiber",
      "why": "Dairy-free but keeps the creamy-crunchy combo.",
-     "vec": [0.6, 0.1, 0.6, 0.0, 0.8, 0.2, 0.3, 0.1]},
+     "vec": [0.6, 0.1, 0.6, 0.0, 0.8, 0.2, 0.3, 0.1],
+     "allergen_tags": ["tree_nut"]},  # FDA labeling treats coconut as a tree nut
     {"id": "sw3", "name": "Roasted Chickpeas", "macroDelta": "+4g protein, nut-free",
      "why": "Same salty crunch as peanuts, without the allergen.",
-     "vec": [0.05, 0.8, 0.9, 0.0, 0.0, 0.0, 0.0, 0.5]},
+     "vec": [0.05, 0.8, 0.9, 0.0, 0.0, 0.0, 0.0, 0.5],
+     "allergen_tags": []},
     {"id": "sw4", "name": "Herb Rice Crackers", "macroDelta": "0g gluten, same crunch",
      "why": "Gluten-free swap that keeps the crunchy-savory profile.",
-     "vec": [0.0, 0.6, 0.85, 0.0, 0.05, 0.0, 0.0, 0.7]},
+     "vec": [0.0, 0.6, 0.85, 0.0, 0.05, 0.0, 0.0, 0.7],
+     "allergen_tags": []},
     {"id": "sw5", "name": "Frozen Grapes", "macroDelta": "-18g sugar, all natural",
      "why": "Scratches the same sweet-cold itch as candy or ice cream.",
-     "vec": [0.8, 0.0, 0.1, 0.0, 0.0, 0.9, 0.9, 0.0]},
+     "vec": [0.8, 0.0, 0.1, 0.0, 0.0, 0.9, 0.9, 0.0],
+     "allergen_tags": []},
     {"id": "sw6", "name": "Popped Sorghum", "macroDelta": "+3g fiber, nut-free",
      "why": "Light, airy crunch that scratches a popcorn craving.",
-     "vec": [0.1, 0.5, 0.8, 0.0, 0.1, 0.0, 0.0, 0.3]},
+     "vec": [0.1, 0.5, 0.8, 0.0, 0.1, 0.0, 0.0, 0.3],
+     "allergen_tags": []},
     {"id": "sw7", "name": "Mango Sorbet", "macroDelta": "0g dairy, -8g fat",
      "why": "Fruity and cold enough to replace ice cream cravings.",
-     "vec": [0.85, 0.0, 0.0, 0.1, 0.1, 0.9, 0.9, 0.0]},
+     "vec": [0.85, 0.0, 0.0, 0.1, 0.1, 0.9, 0.9, 0.0],
+     "allergen_tags": []},
     {"id": "sw8", "name": "Salted Roasted Edamame", "macroDelta": "+8g protein, gluten-free",
      "why": "Salty, poppable snacking without the common allergens.",
-     "vec": [0.0, 0.75, 0.55, 0.0, 0.0, 0.0, 0.1, 0.4]},
+     "vec": [0.0, 0.75, 0.55, 0.0, 0.0, 0.0, 0.1, 0.4],
+     "allergen_tags": ["soy"]},
     {"id": "sw9", "name": "Kefir Smoothie", "macroDelta": "+6g protein, probiotic",
      "why": "Creamy and cold, closer to a milkshake than a diet swap.",
-     "vec": [0.5, 0.0, 0.0, 0.0, 0.9, 0.3, 0.7, 0.0]},
+     "vec": [0.5, 0.0, 0.0, 0.0, 0.9, 0.3, 0.7, 0.0],
+     "allergen_tags": ["milk"]},
     {"id": "sw10", "name": "Tamari Almonds", "macroDelta": "+5g protein, gluten-free",
      "why": "Savory-salty crunch with a nutty depth, not just 'plain nuts.'",
-     "vec": [0.0, 0.7, 0.7, 0.0, 0.0, 0.0, 0.0, 0.8]},
+     "vec": [0.0, 0.7, 0.7, 0.0, 0.0, 0.0, 0.0, 0.8],
+     "allergen_tags": ["tree_nut", "soy"]},  # tamari is soy-based
     {"id": "sw11", "name": "Watermelon Ice Pops", "macroDelta": "-14g sugar, all natural",
      "why": "Cold and sweet without the syrup-heavy base of most ice pops.",
-     "vec": [0.75, 0.0, 0.0, 0.05, 0.0, 0.85, 0.95, 0.0]},
+     "vec": [0.75, 0.0, 0.0, 0.05, 0.0, 0.85, 0.95, 0.0],
+     "allergen_tags": []},
     {"id": "sw12", "name": "Miso Rice Crisps", "macroDelta": "0g gluten, umami-forward",
      "why": "Savory, crunchy, and salty enough to replace chips.",
-     "vec": [0.0, 0.65, 0.8, 0.0, 0.0, 0.0, 0.0, 0.85]},
+     "vec": [0.0, 0.65, 0.8, 0.0, 0.0, 0.0, 0.0, 0.85],
+     "allergen_tags": ["soy"]},  # miso is soy-based
 ]
 
 # Very small keyword -> axis lexicon used only to turn free-text craving
@@ -278,15 +290,34 @@ else:
 _catalog_embeddings = _vae.embed(_catalog_matrix)  # (n_items, LATENT_DIM)
 
 
-def rank_swaps_vae(query_vec: np.ndarray, limit: int = 3) -> List[dict]:
+def rank_swaps_vae(query_vec: np.ndarray, limit: int = 3, exclude_allergens: List[str] = None) -> List[dict]:
     """
     Ranks SWAP_CATALOG by Euclidean distance in the learned latent space
     between the query's embedding and each item's embedding — this is the
     line that replaces the old tag-overlap set intersection.
+
+    exclude_allergens: allergens on the user's profile. Any candidate
+    whose own allergen_tags intersect this list is dropped BEFORE
+    ranking — a craving-similarity match is worthless (and actively
+    dangerous) if the swap itself contains what the user is avoiding.
+    This is filtered first, not just sorted last, so a bad match can
+    never crowd out a safe one within `limit`.
     """
+    exclude_allergens = set(exclude_allergens or [])
+    safe_indices = [
+        i for i, item in enumerate(SWAP_CATALOG)
+        if not (set(item["allergen_tags"]) & exclude_allergens)
+    ]
+
+    if not safe_indices:
+        return []
+
     q_embed = _vae.embed(query_vec.reshape(1, -1).astype(np.float32))[0]
-    dists = np.linalg.norm(_catalog_embeddings - q_embed, axis=1)
+    candidate_embeds = _catalog_embeddings[safe_indices]
+    dists = np.linalg.norm(candidate_embeds - q_embed, axis=1)
     order = np.argsort(dists)[:limit]
+    chosen = [safe_indices[i] for i in order]
+
     return [
         {
             "id": SWAP_CATALOG[i]["id"],
@@ -294,7 +325,7 @@ def rank_swaps_vae(query_vec: np.ndarray, limit: int = 3) -> List[dict]:
             "macroDelta": SWAP_CATALOG[i]["macroDelta"],
             "why": SWAP_CATALOG[i]["why"],
         }
-        for i in order
+        for i in chosen
     ]
 
 
