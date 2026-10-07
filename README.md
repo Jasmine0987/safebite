@@ -98,6 +98,19 @@ Use these quick links to jump directly to the most important parts of the repo:
 - [Backend requirements](backend/requirements.txt)
 - [Demo environment config](backend/env)
 
+## Explore the app by feature
+
+- [Landing page](safebite/index.html)
+- [Dashboard](safebite/dashboard.html)
+- [Scan workflow](safebite/scan.html)
+- [Verdict page](safebite/verdict.html)
+- [Ingredient detail](safebite/ingredient-detail.html)
+- [Swap suggestions](safebite/swaps.html)
+- [History view](safebite/history.html)
+- [Settings](safebite/settings.html)
+- [About page](safebite/about.html)
+- [How it works](safebite/how-it-works.html)
+
 ## Core features
 
 - OCR-based ingredient extraction with Tesseract
