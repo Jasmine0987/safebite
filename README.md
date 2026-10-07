@@ -73,6 +73,31 @@ flowchart LR
     click N "https://github.com/Jasmine0987/safebite/blob/main/backend/app/ai" "Open swap ranking AI"
 ```
 
+## Interactive codebase explorer
+
+Use these quick links to jump directly to the most important parts of the repo:
+
+| Area | Description | Link |
+| --- | --- | --- |
+| Frontend entry | Main HTML app shell | [safebite/index.html](safebite/index.html) |
+| App logic | Browser flow for scan, verdict, swaps, and ingredient pages | [safebite/app.js](safebite/app.js) |
+| Shared frontend helpers | Utilities and shared browser behavior | [safebite/script.js](safebite/script.js) |
+| Backend API | Core FastAPI app and routes | [backend/app/main.py](backend/app/main.py) |
+| Explain routes | LLM-powered ingredient and swap explanation endpoints | [backend/app/api/explain_routes.py](backend/app/api/explain_routes.py) |
+| Core config | App settings, CORS, and environment configuration | [backend/app/core/config.py](backend/app/core/config.py) |
+| Data layer | Ingredient KB and domain data | [backend/app/data](backend/app/data) |
+| Backend docs | Setup and implementation notes | [backend/README.md](backend/README.md) |
+| Root docs | Project overview | [README.md](README.md) |
+
+### Jump directly into the key runtime files
+
+- [Scan flow API](backend/app/main.py)
+- [OCR and verdict logic](backend/app/main.py#L156-L230)
+- [Frontend dashboard & scan actions](safebite/app.js)
+- [Frontend stylesheet](safebite/style.css)
+- [Backend requirements](backend/requirements.txt)
+- [Demo environment config](backend/env)
+
 ## Core features
 
 - OCR-based ingredient extraction with Tesseract
@@ -149,18 +174,18 @@ flowchart LR
 
 The `safebite/` app is a browser-based experience with pages like:
 
-- `index.html` — landing experience
-- `dashboard.html` — scan history and product overview
-- `scan.html` — camera/file upload path
-- `verdict.html` — product result summary
-- `ingredient-detail.html` — ingredient explanation details
-- `swaps.html` — alternative product recommendations
+- [index.html](safebite/index.html) — landing experience
+- [dashboard.html](safebite/dashboard.html) — scan history and product overview
+- [scan.html](safebite/scan.html) — camera/file upload path
+- [verdict.html](safebite/verdict.html) — product result summary
+- [ingredient-detail.html](safebite/ingredient-detail.html) — ingredient explanation details
+- [swaps.html](safebite/swaps.html) — alternative product recommendations
 
 The frontend uses JavaScript to make requests to the FastAPI backend via `fetch()`.
 
 ### Backend flow
 
-The Python backend is centered around `backend/app/main.py` and provides the API contract that the frontend expects. The main logic includes:
+The Python backend is centered around [backend/app/main.py](backend/app/main.py) and provides the API contract that the frontend expects. The main logic includes:
 
 - image upload endpoint for label scans,
 - OCR extraction from uploaded product images,
@@ -247,7 +272,7 @@ If the frontend calls the backend from `localhost:8000`, ensure the backend is r
 
 ## Environment and configuration
 
-The backend includes a sample environment file at `backend/env`:
+The backend includes a sample environment file at [backend/env](backend/env):
 
 ```env
 APP_ENV=development
